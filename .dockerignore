@@ -2,11 +2,13 @@ bin
 obj
 *.user
 *.suo
+*.pdb
 *.log
 *.db
+*.md
 .git
 .gitignore
 .vscode
 .vs
 Dockerfile
-README.md
+docker-compose.yml
