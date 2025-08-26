@@ -1,0 +1,3 @@
+[21/08/2025 2:55:49 CH +07:00] Convert preview failed for clc03_hmtoan_ass1 (4).docx
+System.Exception: Hết thời gian chờ convert PDF (async=true).
+   at OnlyOfficeDemo.Controllers.DocsController.EnsurePreviewPdfAsync(String name) in C:\Users\Toan\Documents\LapTrinh\.net\project1\OnlyOfficeDemo\Controllers\DocsController.cs:line 328

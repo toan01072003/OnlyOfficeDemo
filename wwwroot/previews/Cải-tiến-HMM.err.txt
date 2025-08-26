@@ -1,0 +1,5 @@
+[21/08/2025 2:55:08 CH +07:00] Convert preview failed for Cải-tiến-HMM.xlsx
+System.Exception: ConvertService did not return JSON (see .err.txt for details).
+   at OnlyOfficeDemo.Controllers.DocsController.<>c__DisplayClass19_1.<<EnsurePreviewPdfAsync>g__CallOnceAsync|0>d.MoveNext() in C:\Users\Toan\Documents\LapTrinh\.net\project1\OnlyOfficeDemo\Controllers\DocsController.cs:line 290
+--- End of stack trace from previous location ---
+   at OnlyOfficeDemo.Controllers.DocsController.EnsurePreviewPdfAsync(String name) in C:\Users\Toan\Documents\LapTrinh\.net\project1\OnlyOfficeDemo\Controllers\DocsController.cs:line 321

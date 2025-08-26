@@ -1,0 +1,42 @@
+@using System
+@{
+    var files = (System.Collections.Generic.List<string>)ViewBag.Files;
+    string PdfPreviewUrl(string file)
+    {
+        var baseName = System.IO.Path.GetFileNameWithoutExtension(file);
+        var safe = Uri.EscapeDataString(baseName);
+        return $"/previews/{safe}.pdf";
+    }
+}
+
+
+
+<h2>ONLYOFFICE Demo</h2>
+
+<form method="post" enctype="multipart/form-data" asp-action="Upload" asp-controller="Docs">
+    <input type="file" name="file" />
+    <button type="submit">Upload & Open</button>
+    <p><small>Hỗ trợ: .docx, .xlsx, .pptx… (preview PDF tự tạo sau khi sửa/lưu)</small></p>
+</form>
+
+<h3>Files</h3>
+@if (files.Count == 0)
+{
+    <p><i>Chưa có file. Hãy upload một file phía trên.</i></p>
+}
+else
+{
+    <ul>
+        @foreach (var f in files)
+        {
+            <li>
+                @f
+                [<a asp-action="Edit" asp-route-name="@f">edit</a> |
+                 <a asp-action="Edit" asp-route-name="@f" asp-route-mode="view">view</a>]
+                <div style="border:1px solid #ddd;margin:8px 0;">
+                    <iframe src="@PdfPreviewUrl(f)#view=FitH" width="100%" height="480" style="border:0;"></iframe>
+                </div>
+            </li>
+        }
+    </ul>
+}
