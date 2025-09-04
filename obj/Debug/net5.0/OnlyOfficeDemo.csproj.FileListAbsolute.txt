@@ -68,3 +68,4 @@ C:\Users\Toan\Documents\LapTrinh\.net\project1\OnlyOfficeDemo\bin\Debug\net5.0\D
 C:\Users\Toan\Documents\LapTrinh\.net\project1\OnlyOfficeDemo\bin\Debug\net5.0\OpenXmlPowerTools.dll
 C:\Users\Toan\Documents\LapTrinh\.net\project1\OnlyOfficeDemo\bin\Debug\net5.0\System.IO.Packaging.dll
 C:\Users\Toan\Documents\LapTrinh\.net\project1\OnlyOfficeDemo\bin\Debug\net5.0\System.Management.Automation.dll
+C:\Users\Toan\Documents\LapTrinh\.net\project1\OnlyOfficeDemo\obj\Debug\net5.0\OnlyOfficeDemo.sourcelink.json

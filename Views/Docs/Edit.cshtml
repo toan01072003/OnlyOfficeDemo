@@ -14,10 +14,60 @@
     <script src="@Model.DocumentServerApiJs"></script>
 </head>
 <body>
-    <div id="editor"></div>
+    <div id="editor">
+        <div style="padding: 20px; text-align: center;">
+            <h3>Loading document editor...</h3>
+            <p>If the editor doesn't appear within a few seconds, please check the following:</p>
+            <ul style="text-align: left; max-width: 600px; margin: 0 auto;">
+                <li>Make sure the OnlyOffice Document Server is running and accessible</li>
+                <li>Check browser console for any JavaScript errors</li>
+                <li>Verify that the document file exists and is accessible</li>
+            </ul>
+        </div>
+    </div>
+    
     <script>
+        // Display configuration for debugging
         const docConfig = @Html.Raw(configJson);
-        const editor = new DocsAPI.DocEditor("editor", docConfig);
+        console.log('OnlyOffice Config:', docConfig);
+        console.log('API JS URL:', '@Model.DocumentServerApiJs');
+        
+        // Check if the API script loaded
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                try {
+                    if (typeof DocsAPI === 'undefined') {
+                        console.error('DocsAPI is undefined. The OnlyOffice API script may not have loaded correctly.');
+                        document.getElementById('editor').innerHTML = `
+                            <div style="padding: 20px; color: red; text-align: center;">
+                                <h3>Error: OnlyOffice API not loaded</h3>
+                                <p>The OnlyOffice Document Server API could not be loaded from: <br><code>@Model.DocumentServerApiJs</code></p>
+                                <p>Please check the following:</p>
+                                <ul style="text-align: left; max-width: 600px; margin: 0 auto;">
+                                    <li>Verify that the OnlyOffice Document Server is running at <code>@Model.DocumentServerApiJs.Split("/web-apps")[0]</code></li>
+                                    <li>Check if there are any CORS issues in the browser console</li>
+                                    <li>Make sure the DocumentServerOrigin in appsettings.json is correct</li>
+                                </ul>
+                                <p><a href="/">Return to document list</a></p>
+                            </div>
+                        `;
+                    } else {
+                        const editor = new DocsAPI.DocEditor("editor", docConfig);
+                        console.log('Editor initialized successfully');
+                    }
+                } catch (error) {
+                    console.error('Error initializing OnlyOffice editor:', error);
+                    document.getElementById('editor').innerHTML = `
+                        <div style="padding: 20px; color: red; text-align: center;">
+                            <h3>Error initializing editor</h3>
+                            <p>Error message: ${error.message}</p>
+                            <p>Please check browser console for more details.</p>
+                            <p><a href="/">Return to document list</a></p>
+                        </div>
+                    `;
+                }
+            }, 1000); // Give the script a second to load
+        });
     </script>
 </body>
 </html>

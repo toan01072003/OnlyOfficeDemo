@@ -26,6 +26,8 @@ namespace OnlyOfficeDemo.Controllers
         {
             ".docx",".doc",".xlsx",".xls",".pptx",".ppt",".odt",".ods",".odp",".txt",".csv"
         };
+        
+
 
         public DocsController(IHttpClientFactory httpFactory, ILogger<DocsController> logger, IConfiguration cfg)
         {
@@ -33,6 +35,8 @@ namespace OnlyOfficeDemo.Controllers
             _logger = logger;
             _cfg = cfg;
         }
+        
+
 
         private string DocsRoot
         {
@@ -117,19 +121,40 @@ namespace OnlyOfficeDemo.Controllers
         [HttpGet]
         public IActionResult Edit(string name, string mode = "edit")
         {
-            if (string.IsNullOrWhiteSpace(name)) return RedirectToAction("Index");
+            _logger.LogInformation("Edit action called for file: {FileName}, mode: {Mode}", name, mode);
+            
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                _logger.LogWarning("Edit action called with empty filename");
+                return RedirectToAction("Index");
+            }
+            
             var storagePath = Path.Combine(DocsRoot, name);
-            if (!System.IO.File.Exists(storagePath)) return NotFound("File not found.");
+            _logger.LogInformation("Storage path: {StoragePath}", storagePath);
+            
+            if (!System.IO.File.Exists(storagePath))
+            {
+                _logger.LogWarning("File not found: {StoragePath}", storagePath);
+                return NotFound("File not found.");
+            }
 
-            var configuredHost = _cfg["OnlyOffice:PublicHost"];     // ví dụ: host.docker.internal:5000 hoặc app.domain
-            var scheme        = _cfg["OnlyOffice:Scheme"] ?? (Request.Scheme ?? "http");
-            var publicHost    = string.IsNullOrWhiteSpace(configuredHost) ? Request.Host.ToString() : configuredHost;
+            var configuredHost = _cfg["OnlyOffice:PublicHost"];
+            var scheme = _cfg["OnlyOffice:Scheme"] ?? (Request.Scheme ?? "http");
+            var publicHost = string.IsNullOrWhiteSpace(configuredHost) ? Request.Host.ToString() : configuredHost;
+            
+            _logger.LogInformation("Configuration - DocumentServerOrigin: {Origin}, PublicHost: {PublicHost}, Scheme: {Scheme}", 
+                DocumentServerOrigin, publicHost, scheme);
 
             var fileUrl = Url.ActionLink("FilePublic", null, new { name }, scheme, publicHost);
             var docKey = $"{name}_{System.IO.File.GetLastWriteTimeUtc(storagePath).Ticks}";
             var fileType = GetFileTypeByExtension(Path.GetExtension(name));
             var callbackUrl = Url.ActionLink("Save", "Docs", new { name }, scheme, publicHost);
+            
+            _logger.LogInformation("Generated URLs - FileUrl: {FileUrl}, CallbackUrl: {CallbackUrl}", fileUrl, callbackUrl);
 
+            // Create document info
+            _logger.LogInformation("Preparing editor configuration without JWT token");
+            
             var configPayload = new
             {
                 document = new
@@ -143,12 +168,22 @@ namespace OnlyOfficeDemo.Controllers
                 {
                     mode = mode == "view" ? "view" : "edit",
                     callbackUrl = callbackUrl,
-                    user = new { id = "u1", name = "Demo User" }
+                    user = new { id = "u1", name = "Demo User" },
+                    lang = "en",
+                    customization = new
+                    {
+                        goback = new
+                        {
+                            url = Url.Action("Index", "Docs")
+                        }
+                    }
                 },
                 width = "100%",
                 height = "100%",
                 type = "desktop"
             };
+            
+            _logger.LogInformation("Config payload: {ConfigPayload}", System.Text.Json.JsonSerializer.Serialize(configPayload));
 
             var vm = new OnlyOfficeConfig
             {
