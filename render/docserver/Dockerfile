@@ -4,8 +4,9 @@ FROM onlyoffice/documentserver:latest
 ENV JWT_ENABLED=false \
     ALLOW_PRIVATE_IP_ADDRESS=true
 
-# Build context is repo root on Render. Use full path.
-COPY render/docserver/start.sh /start.sh
+# In Railway, the Dockerfile's directory is often the build context.
+# Copy the script relative to this Dockerfile's folder.
+COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
 # Render expects the app to listen on $PORT
