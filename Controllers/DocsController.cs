@@ -68,7 +68,7 @@ namespace OnlyOfficeDemo.Controllers
 
         // Home: danh sách + upload + (iframe PDF)
         [HttpGet]
-        public IActionResult Index()
+        public async Task<IActionResult> Index()
         {
             var files = Directory.GetFiles(DocsRoot)
                                  .Select(Path.GetFileName)
@@ -77,6 +77,7 @@ namespace OnlyOfficeDemo.Controllers
             ViewBag.Files = files;
             ViewBag.ApiJs = $"{DocumentServerOrigin}{ApiJsPath}";
             ViewBag.UseOnlineViewer = bool.TryParse(_cfg["OnlyOffice:UseOnlineViewer"], out var u) && u;
+            ViewBag.CanEdit = await IsDocServerAvailableAsync();
             return View();
         }
 
@@ -123,7 +124,7 @@ namespace OnlyOfficeDemo.Controllers
 
         // Nhúng editor
         [HttpGet]
-        public IActionResult Edit(string name, string mode = "edit")
+        public async Task<IActionResult> Edit(string name, string mode = "edit")
         {
             _logger.LogInformation("Edit action called for file: {FileName}, mode: {Mode}", name, mode);
             
@@ -133,8 +134,9 @@ namespace OnlyOfficeDemo.Controllers
                 return RedirectToAction("Index");
             }
 
-            // Fallback: if configured to skip DocumentServer, redirect to online viewer
-            if (bool.TryParse(_cfg["OnlyOffice:UseOnlineViewer"], out var useOnline) && useOnline)
+            // If UseOnlineViewer is enabled, only redirect for view-mode; allow edit to use DS
+            if (bool.TryParse(_cfg["OnlyOffice:UseOnlineViewer"], out var useOnline) && useOnline
+                && string.Equals(mode, "view", StringComparison.OrdinalIgnoreCase))
             {
                 return RedirectToAction(nameof(OnlineView), new { name });
             }
@@ -161,6 +163,16 @@ namespace OnlyOfficeDemo.Controllers
             var callbackUrl = Url.ActionLink("Save", "Docs", new { name }, scheme, publicHost);
             
             _logger.LogInformation("Generated URLs - FileUrl: {FileUrl}, CallbackUrl: {CallbackUrl}", fileUrl, callbackUrl);
+
+            // If editing, ensure Document Server is reachable; else fall back to viewer
+            if (!string.Equals(mode, "view", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!await IsDocServerAvailableAsync())
+                {
+                    _logger.LogWarning("DocumentServer not available; redirecting to OnlineView for {Name}", name);
+                    return RedirectToAction(nameof(OnlineView), new { name });
+                }
+            }
 
             // Create document info
             _logger.LogInformation("Preparing editor configuration without JWT token");
@@ -261,6 +273,20 @@ namespace OnlyOfficeDemo.Controllers
             };
 
             return View("Viewer", vm);
+        }
+
+        private async Task<bool> IsDocServerAvailableAsync()
+        {
+            try
+            {
+                var origin = DocumentServerOrigin?.TrimEnd('/') ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(origin)) return false;
+                using var client = _httpFactory.CreateClient();
+                client.Timeout = TimeSpan.FromSeconds(2);
+                var resp = await client.GetAsync($"{origin}/healthcheck");
+                return resp.IsSuccessStatusCode;
+            }
+            catch { return false; }
         }
         [HttpGet]
 public async Task<IActionResult> RegeneratePreviews()
