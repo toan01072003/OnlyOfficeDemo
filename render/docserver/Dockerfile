@@ -1,16 +1,16 @@
 FROM onlyoffice/documentserver:latest
 
-# Optional: set default envs; Render can override at deploy time
+# Optional: set default envs; PaaS can override at deploy time
 ENV JWT_ENABLED=false \
     ALLOW_PRIVATE_IP_ADDRESS=true
 
-# In Railway, the Dockerfile's directory is often the build context.
-# Copy the script relative to this Dockerfile's folder.
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
+# Make build robust to different contexts (repo root vs render/docserver)
+# Bring current context into image and copy start.sh from either path.
+ADD . /tmp/buildctx
+RUN set -euo pipefail \
+ && (cp /tmp/buildctx/start.sh /start.sh 2>/dev/null \
+     || cp /tmp/buildctx/render/docserver/start.sh /start.sh) \
+ && chmod +x /start.sh
 
-# Ensure our port-fix + healthcheck script runs as entrypoint
+# Run our wrapper that adjusts Nginx listen port and healthcheck
 ENTRYPOINT ["/start.sh"]
-
-# Render expects the app to listen on $PORT
-CMD ["/bin/bash", "/start.sh"]
