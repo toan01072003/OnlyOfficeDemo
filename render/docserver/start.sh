@@ -22,6 +22,9 @@ configure_cookies() {
     }
   }
 }
+JSON
+  echo "[start.sh] Wrote cookie settings to $LOCAL_JSON (SameSite=None; Secure; Partitioned)" >&2
+}
 
 # Clean up WAIT_HOSTS to avoid invalid entries that break nc
 sanitize_wait_hosts() {
@@ -56,8 +59,21 @@ sanitize_wait_hosts() {
     echo "[start.sh] WAIT_HOSTS sanitized to: ${WAIT_HOSTS}" >&2
   fi
 }
-JSON
-  echo "[start.sh] Wrote cookie settings to $LOCAL_JSON (SameSite=None; Secure; Partitioned)" >&2
+
+# Ensure sane defaults for ONLYOFFICE env to avoid startup errors
+ensure_defaults() {
+  case "${DB_TYPE:-}" in
+    postgres|postgresql|mysql|mariadb) ;; # supported values
+    "" ) export DB_TYPE=postgres ; echo "[start.sh] DB_TYPE not set; defaulting to 'postgres'" >&2 ;;
+    *  ) echo "[start.sh] Unknown DB_TYPE='${DB_TYPE}'. Forcing 'postgres'" >&2 ; export DB_TYPE=postgres ;;
+  esac
+
+  # Some images use AMQP_TYPE; default to rabbitmq if empty/invalid
+  case "${AMQP_TYPE:-}" in
+    rabbitmq|amqp) ;; 
+    "" ) export AMQP_TYPE=rabbitmq ;;
+    *  ) export AMQP_TYPE=rabbitmq ;;
+  esac
 }
 
 patch_conf() {
@@ -104,6 +120,7 @@ patch_conf() {
 # Apply cookie config and first attempt at nginx patch (in case config already exists)
 configure_cookies || true
 sanitize_wait_hosts || true
+ensure_defaults || true
 patch_conf || true
 
 # Start default document server supervisor in background
