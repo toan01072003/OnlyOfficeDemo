@@ -9,5 +9,8 @@ ENV JWT_ENABLED=false \
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
+# Ensure our port-fix + healthcheck script runs as entrypoint
+ENTRYPOINT ["/start.sh"]
+
 # Render expects the app to listen on $PORT
 CMD ["/bin/bash", "/start.sh"]

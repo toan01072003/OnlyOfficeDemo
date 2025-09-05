@@ -1,5 +1,0 @@
-[05/09/2025 10:01:31 SA +07:00] Convert preview failed for Mô tả UseCase (1).docx
-System.Exception: ConvertService did not return JSON (see .err.txt for details).
-   at OnlyOfficeDemo.Controllers.DocsController.<>c__DisplayClass19_1.<<EnsurePreviewPdfAsync>g__CallOnceAsync|0>d.MoveNext() in C:\Users\Toan\Documents\LapTrinh\.net\project1\OnlyOfficeDemo\Controllers\DocsController.cs:line 327
---- End of stack trace from previous location ---
-   at OnlyOfficeDemo.Controllers.DocsController.EnsurePreviewPdfAsync(String name) in C:\Users\Toan\Documents\LapTrinh\.net\project1\OnlyOfficeDemo\Controllers\DocsController.cs:line 358
