@@ -22,6 +22,40 @@ configure_cookies() {
     }
   }
 }
+
+# Clean up WAIT_HOSTS to avoid invalid entries that break nc
+sanitize_wait_hosts() {
+  local raw="${WAIT_HOSTS:-}"
+  if [ -z "$raw" ]; then
+    return 0
+  fi
+  local IFS=',' token host port cleaned=()
+  for token in $raw; do
+    token="${token// /}"
+    if [ -z "$token" ]; then
+      continue
+    fi
+    host="${token%%:*}"
+    port="${token##*:}"
+    if [ -z "$host" ] || [ -z "$port" ]; then
+      echo "[start.sh] Dropping WAIT_HOSTS entry '$token' (empty host/port)" >&2
+      continue
+    fi
+    if ! [[ "$port" =~ ^[0-9]+$ ]]; then
+      echo "[start.sh] Dropping WAIT_HOSTS entry '$token' (non-numeric port)" >&2
+      continue
+    fi
+    cleaned+=("${host}:${port}")
+  done
+  if [ ${#cleaned[@]} -eq 0 ]; then
+    echo "[start.sh] Unsetting WAIT_HOSTS (no valid entries)" >&2
+    unset WAIT_HOSTS
+  else
+    WAIT_HOSTS=$(IFS=','; echo "${cleaned[*]}")
+    export WAIT_HOSTS
+    echo "[start.sh] WAIT_HOSTS sanitized to: ${WAIT_HOSTS}" >&2
+  fi
+}
 JSON
   echo "[start.sh] Wrote cookie settings to $LOCAL_JSON (SameSite=None; Secure; Partitioned)" >&2
 }
@@ -69,6 +103,7 @@ patch_conf() {
 
 # Apply cookie config and first attempt at nginx patch (in case config already exists)
 configure_cookies || true
+sanitize_wait_hosts || true
 patch_conf || true
 
 # Start default document server supervisor in background
