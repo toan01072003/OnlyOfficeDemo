@@ -1,0 +1,28 @@
+@model OnlyOfficeDemo.Models.OnlineViewerModel
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var title = string.IsNullOrWhiteSpace(Model?.Title) ? "Viewer" : Model.Title;
+}
+
+<h2>@title</h2>
+
+@if (Model?.Kind == "image")
+{
+    <div style="border:1px solid #ddd;padding:8px;max-width:100%;">
+        <img src="@Model.FileUrl" alt="@title" style="max-width:100%;height:auto;" />
+    </div>
+}
+else
+{
+    <div style="border:1px solid #ddd;">
+        <iframe src="@Model.ViewerUrl" width="100%" height="800" style="border:0;"></iframe>
+    </div>
+}
+
+<p>
+    <a asp-action="Index" asp-controller="Docs">Back to list</a>
+    |
+    <a href="@Model.FileUrl" target="_blank">Open source file</a>
+    @* For transparency: external viewers fetch the file from this public URL *@
+</p>
+

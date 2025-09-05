@@ -1,6 +1,8 @@
 @using System
 @{
     var files = (System.Collections.Generic.List<string>)ViewBag.Files;
+    bool useOnlineViewer = false;
+    try { useOnlineViewer = (bool)(ViewBag.UseOnlineViewer ?? false); } catch { }
     string PdfPreviewUrl(string file)
     {
         var baseName = System.IO.Path.GetFileNameWithoutExtension(file);
@@ -33,9 +35,12 @@ else
                 @f
                 [<a asp-action="Edit" asp-route-name="@f">edit</a> |
                  <a asp-action="Edit" asp-route-name="@f" asp-route-mode="view">view</a>]
-                <div style="border:1px solid #ddd;margin:8px 0;">
-                    <iframe src="@PdfPreviewUrl(f)#view=FitH" width="100%" height="480" style="border:0;"></iframe>
-                </div>
+                @if (!useOnlineViewer)
+                {
+                    <div style="border:1px solid #ddd;margin:8px 0;">
+                        <iframe src="@PdfPreviewUrl(f)#view=FitH" width="100%" height="480" style="border:0;"></iframe>
+                    </div>
+                }
             </li>
         }
     </ul>

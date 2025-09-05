@@ -76,6 +76,7 @@ namespace OnlyOfficeDemo.Controllers
                                  .ToList();
             ViewBag.Files = files;
             ViewBag.ApiJs = $"{DocumentServerOrigin}{ApiJsPath}";
+            ViewBag.UseOnlineViewer = bool.TryParse(_cfg["OnlyOffice:UseOnlineViewer"], out var u) && u;
             return View();
         }
 
@@ -131,7 +132,13 @@ namespace OnlyOfficeDemo.Controllers
                 _logger.LogWarning("Edit action called with empty filename");
                 return RedirectToAction("Index");
             }
-            
+
+            // Fallback: if configured to skip DocumentServer, redirect to online viewer
+            if (bool.TryParse(_cfg["OnlyOffice:UseOnlineViewer"], out var useOnline) && useOnline)
+            {
+                return RedirectToAction(nameof(OnlineView), new { name });
+            }
+
             var storagePath = Path.Combine(DocsRoot, name);
             _logger.LogInformation("Storage path: {StoragePath}", storagePath);
             
@@ -195,6 +202,65 @@ namespace OnlyOfficeDemo.Controllers
             };
 
             return View(vm);
+        }
+
+        // Lightweight online viewer (no DocumentServer). View-only.
+        // Uses Office Web Viewer for Office docs, Google viewer for others,
+        // direct embed for PDF/images.
+        [HttpGet]
+        public IActionResult OnlineView(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return RedirectToAction("Index");
+
+            var path = Path.Combine(DocsRoot, name);
+            if (!System.IO.File.Exists(path)) return NotFound("File not found.");
+
+            var configuredHost = _cfg["OnlyOffice:PublicHost"];
+            var scheme = _cfg["OnlyOffice:Scheme"] ?? (Request.Scheme ?? "http");
+            var publicHost = string.IsNullOrWhiteSpace(configuredHost) ? Request.Host.ToString() : configuredHost;
+
+            var fileUrl = Url.ActionLink("FilePublic", null, new { name }, scheme, publicHost);
+            var ext = (Path.GetExtension(name) ?? "").ToLowerInvariant();
+
+            string kind = "iframe";
+            string viewerUrl;
+
+            bool IsImage(string e) => e == ".png" || e == ".jpg" || e == ".jpeg" || e == ".gif" || e == ".webp" || e == ".bmp" || e == ".svg";
+            bool IsOffice(string e) => e == ".docx" || e == ".doc" || e == ".xlsx" || e == ".xls" || e == ".pptx" || e == ".ppt";
+
+            if (ext == ".pdf")
+            {
+                // Browsers render PDF natively
+                viewerUrl = fileUrl;
+            }
+            else if (IsImage(ext))
+            {
+                // Show image as <img>
+                kind = "image";
+                viewerUrl = fileUrl;
+            }
+            else if (IsOffice(ext))
+            {
+                // Microsoft Office Web Viewer (view-only). Requires public fileUrl.
+                var src = Uri.EscapeDataString(fileUrl);
+                viewerUrl = $"https://view.officeapps.live.com/op/embed.aspx?src={src}";
+            }
+            else
+            {
+                // Fallback to Google Docs viewer for other formats (best effort)
+                var src = Uri.EscapeDataString(fileUrl);
+                viewerUrl = $"https://docs.google.com/gview?embedded=1&url={src}";
+            }
+
+            var vm = new OnlyOfficeDemo.Models.OnlineViewerModel
+            {
+                Title = name,
+                ViewerUrl = viewerUrl,
+                FileUrl = fileUrl,
+                Kind = kind
+            };
+
+            return View("Viewer", vm);
         }
         [HttpGet]
 public async Task<IActionResult> RegeneratePreviews()
