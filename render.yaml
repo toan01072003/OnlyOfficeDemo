@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: onlyoffice-app
+    env: dotnet
+    plan: starter
+    buildCommand: dotnet restore && dotnet publish -c Release -o out
+    startCommand: dotnet out/OnlyOfficeDemo.dll
+    healthCheckPath: /
+    envVars:
+      - key: ASPNETCORE_URLS
+        value: http://0.0.0.0:${PORT}
+      - key: OnlyOffice__Scheme
+        value: https
+      # Set this after the Document Server is deployed
+      # - key: OnlyOffice__DocumentServerOrigin
+      #   value: https://onlyoffice-docserver.onrender.com
+      # Optionally set PublicHost; if omitted, app uses the request Host header
+      # - key: OnlyOffice__PublicHost
+      #   value: your-app.onrender.com
+    disks:
+      - name: docs-data
+        mountPath: /opt/render/project/src/wwwroot
+        sizeGB: 10
+
+  - type: web
+    name: onlyoffice-docserver
+    env: docker
+    plan: standard
+    dockerfilePath: render/docserver/Dockerfile
+    healthCheckPath: /healthcheck
+    envVars:
+      - key: JWT_ENABLED
+        value: "false"
+      - key: ALLOW_PRIVATE_IP_ADDRESS
+        value: "true"

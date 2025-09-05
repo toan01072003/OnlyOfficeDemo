@@ -277,7 +277,7 @@ public async Task<IActionResult> RegeneratePreviews()
     try
     {
         var configuredHost = _cfg["OnlyOffice:PublicHost"];
-        var scheme        = _cfg["OnlyOffice:Scheme"] ?? "http";
+        var scheme        = _cfg["OnlyOffice:Scheme"] ?? (Request.Scheme ?? "http");
         var publicHost    = string.IsNullOrWhiteSpace(configuredHost) ? Request.Host.ToString() : configuredHost;
 
         // URL public để Document Server tải file gốc
