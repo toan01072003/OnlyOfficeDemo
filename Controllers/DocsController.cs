@@ -167,16 +167,6 @@ namespace OnlyOfficeDemo.Controllers
             
             _logger.LogInformation("Generated URLs - FileUrl: {FileUrl}, CallbackUrl: {CallbackUrl}", fileUrl, callbackUrl);
 
-            // If editing, ensure Document Server is reachable; else fall back to viewer
-            if (!string.Equals(mode, "view", StringComparison.OrdinalIgnoreCase))
-            {
-                if (!await IsDocServerAvailableAsync())
-                {
-                    _logger.LogWarning("DocumentServer not available; redirecting to OnlineView for {Name}", name);
-                    return RedirectToAction(nameof(OnlineView), new { name });
-                }
-            }
-
             // Create document info
             _logger.LogInformation("Preparing editor configuration without JWT token");
             
