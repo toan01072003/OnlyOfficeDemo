@@ -1,0 +1,3 @@
+[05/09/2025 10:10:41 SA +07:00] Convert preview failed for Mô tả UseCase (2).docx
+System.Exception: Hết thời gian chờ convert PDF (async=true).
+   at OnlyOfficeDemo.Controllers.DocsController.EnsurePreviewPdfAsync(String name) in C:\Users\Toan\Documents\LapTrinh\.net\project1\OnlyOfficeDemo\Controllers\DocsController.cs:line 395

@@ -9,6 +9,8 @@ using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace OnlyOfficeDemo.Controllers
 {
@@ -105,6 +107,7 @@ namespace OnlyOfficeDemo.Controllers
 
         // Phục vụ file cho Document Server tải về
         [HttpGet("/files/{name}")]
+        [HttpHead("/files/{name}")]
         public IActionResult FilePublic(string name)
         {
             var path = Path.Combine(DocsRoot, name);
@@ -113,8 +116,8 @@ namespace OnlyOfficeDemo.Controllers
             var provider = new FileExtensionContentTypeProvider();
             if (!provider.TryGetContentType(path, out var contentType)) contentType = "application/octet-stream";
 
-            var fileBytes = System.IO.File.ReadAllBytes(path);
-            return File(fileBytes, contentType, enableRangeProcessing: true);
+            // Trả file vật lý, để tránh load toàn bộ vào RAM và hỗ trợ HEAD tốt hơn
+            return PhysicalFile(path, contentType, enableRangeProcessing: true);
         }
 
         // Nhúng editor
@@ -146,7 +149,7 @@ namespace OnlyOfficeDemo.Controllers
                 DocumentServerOrigin, publicHost, scheme);
 
             var fileUrl = Url.ActionLink("FilePublic", null, new { name }, scheme, publicHost);
-            var docKey = $"{name}_{System.IO.File.GetLastWriteTimeUtc(storagePath).Ticks}";
+            var docKey = ComputeDocKey(name, storagePath);
             var fileType = GetFileTypeByExtension(Path.GetExtension(name));
             var callbackUrl = Url.ActionLink("Save", "Docs", new { name }, scheme, publicHost);
             
@@ -260,8 +263,8 @@ public async Task<IActionResult> RegeneratePreviews()
         // ===== Convert DOCX/XLSX/PPTX → PDF bằng ONLYOFFICE ConvertService (polling) =====
 
         private async Task EnsurePreviewPdfAsync(string name)
-{
-    var srcPath = Path.Combine(DocsRoot, name);
+        {
+            var srcPath = Path.Combine(DocsRoot, name);
     if (!System.IO.File.Exists(srcPath)) return;
 
     var pdfPath = GetPreviewPdfPath(name);
@@ -284,7 +287,7 @@ public async Task<IActionResult> RegeneratePreviews()
         var convertEndpoint = $"{documentServerOrigin.TrimEnd('/')}/ConvertService.ashx";
 
         var fileType = Path.GetExtension(name).Trim('.').ToLowerInvariant(); // docx/xlsx/pptx/...
-        var key = $"{name}_{System.IO.File.GetLastWriteTimeUtc(srcPath).Ticks}";
+        var key = ComputeDocKey(name, srcPath);
 
         // Dùng async=true rồi poll
         var payload = new
@@ -350,16 +353,46 @@ public async Task<IActionResult> RegeneratePreviews()
             return (endConvert, resultUrl ?? "", percent);
         }
 
-        const int maxTries = 10;
+        const int maxTries = 30;
         for (int i = 1; i <= maxTries; i++)
         {
             var (endConvert, _, percent) = await CallOnceAsync();
             _logger.LogInformation("Convert poll {Try}/{Max} key={Key} percent={Percent} end={End}",
                 i, maxTries, key, percent, endConvert);
             if (endConvert) return;
-            await Task.Delay(TimeSpan.FromSeconds(2));
+            await Task.Delay(TimeSpan.FromSeconds(3));
         }
 
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(pdfPath)!);
+            // One more attempt with async=false to capture immediate error message
+            var payloadSync = new
+            {
+                async = false,
+                url = fileUrl,
+                outputtype = "pdf",
+                filetype = fileType,
+                title = name,
+                key = key
+            };
+            var req2 = new HttpRequestMessage(HttpMethod.Post, convertEndpoint)
+            {
+                Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(payloadSync),
+                                            System.Text.Encoding.UTF8, "application/json")
+            };
+            req2.Headers.Accept.ParseAdd("application/json");
+            var resp2 = await client.SendAsync(req2);
+            var body2 = await resp2.Content.ReadAsStringAsync();
+
+            var diag = $"[{DateTimeOffset.Now}] Timeout waiting for ConvertService (async).\\n" +
+                      $"Name: {name}\\nKey: {key}\\n" +
+                      $"Endpoint: {convertEndpoint}\\n" +
+                      $"Payload.url: {fileUrl}\\nPayload.filetype: {fileType}\\n";
+            diag += $"\\nSynchronous probe response (status {(int)resp2.StatusCode}):\\n{body2}\\n";
+            await System.IO.File.WriteAllTextAsync(errPath, diag);
+        }
+        catch { }
         throw new Exception("Hết thời gian chờ convert PDF (async=true).");
     }
     catch (Exception ex)
@@ -417,6 +450,27 @@ public async Task<IActionResult> RegeneratePreviews()
             } while (System.IO.File.Exists(Path.Combine(DocsRoot, candidate)));
 
             return candidate;
+        }
+
+        private string ComputeDocKey(string name, string filePath)
+        {
+            try
+            {
+                var ticks = System.IO.File.Exists(filePath)
+                    ? System.IO.File.GetLastWriteTimeUtc(filePath).Ticks
+                    : DateTime.UtcNow.Ticks;
+                var raw = $"{name}|{ticks}";
+                using var sha = SHA256.Create();
+                var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(raw));
+                var hex = BitConverter.ToString(hash).Replace("-", string.Empty).ToLowerInvariant();
+                // OnlyOffice key limit is 128 chars; hex is 64 chars, safe ASCII
+                return hex.Length <= 128 ? hex : hex.Substring(0, 128);
+            }
+            catch
+            {
+                // Fallback to a safe random GUID if hashing fails
+                return Guid.NewGuid().ToString("N");
+            }
         }
     }
 }
