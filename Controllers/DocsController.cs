@@ -79,6 +79,7 @@ namespace OnlyOfficeDemo.Controllers
             ViewBag.Files = files;
             ViewBag.ApiJs = $"{DocumentServerOrigin}{ApiJsPath}";
             ViewBag.UseOnlineViewer = bool.TryParse(_cfg["OnlyOffice:UseOnlineViewer"], out var u) && u;
+            // Keep this for telemetry; UI will show edit regardless and Edit() will fallback if needed
             ViewBag.CanEdit = await IsDocServerAvailableAsync();
             return View();
         }
@@ -304,11 +305,24 @@ namespace OnlyOfficeDemo.Controllers
                 var origin = DocumentServerOrigin?.TrimEnd('/') ?? string.Empty;
                 if (string.IsNullOrWhiteSpace(origin)) return false;
                 using var client = _httpFactory.CreateClient();
-                client.Timeout = TimeSpan.FromSeconds(3);
-                // Probe the API JS (works on official image without custom /healthcheck)
-                var req = new HttpRequestMessage(HttpMethod.Head, $"{origin}{ApiJsPath}");
-                var resp = await client.SendAsync(req);
-                return resp.IsSuccessStatusCode;
+                client.Timeout = TimeSpan.FromSeconds(5);
+
+                // 1) Try /healthcheck if available
+                try
+                {
+                    var resp1 = await client.GetAsync($"{origin}/healthcheck");
+                    if ((int)resp1.StatusCode >= 200 && (int)resp1.StatusCode < 300)
+                        return true;
+                }
+                catch { }
+
+                // 2) Fallback: GET api.js with Range=bytes=0-0 to minimize payload
+                var req = new HttpRequestMessage(HttpMethod.Get, $"{origin}{ApiJsPath}");
+                try { req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 0); } catch { }
+                req.Headers.Accept.ParseAdd("application/javascript, text/javascript, */*");
+                var resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+                var code = (int)resp.StatusCode;
+                return code >= 200 && code < 400; // accept 2xx and redirects
             }
             catch { return false; }
         }

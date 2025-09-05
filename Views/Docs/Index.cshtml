@@ -2,9 +2,7 @@
 @{
     var files = (System.Collections.Generic.List<string>)ViewBag.Files;
     bool useOnlineViewer = false;
-    bool canEdit = false;
     try { useOnlineViewer = (bool)(ViewBag.UseOnlineViewer ?? false); } catch { }
-    try { canEdit = (bool)(ViewBag.CanEdit ?? false); } catch { }
     string PdfPreviewUrl(string file)
     {
         var baseName = System.IO.Path.GetFileNameWithoutExtension(file);
@@ -36,15 +34,7 @@ else
             <li>
                 @f
                 [
-                    @if (canEdit)
-                    {
-                        <a asp-action="Edit" asp-route-name="@f">edit</a>
-                    }
-                    else
-                    {
-                        <span title="Editing requires Document Server" style="opacity:0.6;cursor:not-allowed;">edit</span>
-                    }
-                    |
+                    <a asp-action="Edit" asp-route-name="@f">edit</a> |
                     @if (useOnlineViewer)
                     {
                         <a asp-action="OnlineView" asp-route-name="@f">view</a>
