@@ -195,6 +195,38 @@ drop_broken_waits() {
 }
 
 drop_broken_waits || true
+
+# Forcefully remove any WAIT* env and set DB host defaults to localhost when ambiguous
+hard_disable_waits() {
+  env | awk -F= '/^WAIT/ { print $1 }' | while read -r n; do
+    echo "[start.sh] Unsetting $n" >&2
+    unset "$n" || true
+  done
+  unset WAIT_HOST WAIT_PORT WAIT_FOR_HOST WAIT_FOR_PORT WAIT_HOSTS WAIT_FOR WAIT_TIMEOUT WAIT_SLEEP 2>/dev/null || true
+}
+
+force_local_db_defaults() {
+  for hv pv in DB_HOST DB_PORT POSTGRES_HOST POSTGRES_PORT POSTGRESQL_HOST POSTGRESQL_PORT ONLYOFFICE_DB_HOST ONLYOFFICE_DB_PORT PGHOST PGPORT; do :; done
+  # Explicitly ensure localhost if any port var is set without host
+  for pair in "DB_HOST DB_PORT" "POSTGRES_HOST POSTGRES_PORT" "POSTGRESQL_HOST POSTGRESQL_PORT" "ONLYOFFICE_DB_HOST ONLYOFFICE_DB_PORT" "PGHOST PGPORT"; do
+    set -- $pair
+    hv=$1; pv=$2
+    eval hv_val="\${$hv:-}"
+    eval pv_val="\${$pv:-}"
+    if [ -z "$hv_val" ] && [ -n "$pv_val" ]; then
+      eval export $hv=localhost
+      echo "[start.sh] Set $hv=localhost (fallback for $pv=$pv_val)" >&2
+    fi
+    if echo "${hv_val}" | grep -Eq '^[0-9]+$'; then
+      eval export $pv="$hv_val"
+      eval export $hv=localhost
+      echo "[start.sh] Corrected $hv/$pv (numeric host interpreted as port)" >&2
+    fi
+  done
+}
+
+hard_disable_waits || true
+force_local_db_defaults || true
 patch_conf || true
 
 # Start default document server supervisor in background
