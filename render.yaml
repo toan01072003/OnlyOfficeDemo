@@ -17,10 +17,10 @@ services:
       # Optionally set PublicHost; if omitted, app uses the request Host header
       # - key: OnlyOffice__PublicHost
       #   value: your-app.onrender.com
-    disks:
-      - name: docs-data
-        mountPath: /opt/render/project/src/wwwroot
-        sizeGB: 10
+    disk:
+      name: docs-data
+      mountPath: /opt/render/project/src/wwwroot
+      sizeGB: 10
 
   - type: web
     name: onlyoffice-docserver
