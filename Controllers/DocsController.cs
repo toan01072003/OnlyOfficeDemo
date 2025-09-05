@@ -180,6 +180,7 @@ namespace OnlyOfficeDemo.Controllers
             // Create document info
             _logger.LogInformation("Preparing editor configuration without JWT token");
             
+            bool isView = string.Equals(mode, "view", StringComparison.OrdinalIgnoreCase);
             var configPayload = new
             {
                 document = new
@@ -188,10 +189,19 @@ namespace OnlyOfficeDemo.Controllers
                     key = docKey,
                     title = name,
                     url = fileUrl,
+                    permissions = new
+                    {
+                        edit = !isView,
+                        download = true,
+                        print = true,
+                        comment = true,
+                        review = true,
+                        fillForms = true
+                    }
                 },
                 editorConfig = new
                 {
-                    mode = mode == "view" ? "view" : "edit",
+                    mode = isView ? "view" : "edit",
                     callbackUrl = callbackUrl,
                     user = new { id = "u1", name = "Demo User" },
                     lang = "en",
