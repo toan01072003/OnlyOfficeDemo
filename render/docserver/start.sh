@@ -226,7 +226,42 @@ force_local_db_defaults() {
 }
 
 hard_disable_waits || true
-force_local_db_defaults || true
+
+# Strongly set local DB vars so any wait scripts get a valid host:port
+set_local_db_vars() {
+  local pairs=(
+    "DB_HOST DB_PORT"
+    "POSTGRES_HOST POSTGRES_PORT"
+    "POSTGRESQL_HOST POSTGRESQL_PORT"
+    "ONLYOFFICE_DB_HOST ONLYOFFICE_DB_PORT"
+    "PGHOST PGPORT"
+  )
+  for pair in "${pairs[@]}"; do
+    set -- $pair
+    local hv="$1" pv="$2" hv_val pv_val
+    eval hv_val="\${$hv:-}"
+    eval pv_val="\${$pv:-}"
+    # Default port to 5432 when missing or non-numeric
+    if ! echo "${pv_val:-}" | grep -Eq '^[0-9]+$'; then
+      pv_val=5432
+      eval export $pv="$pv_val"
+    fi
+    # Ensure host is not empty and not purely numeric
+    if [ -z "${hv_val:-}" ] || echo "$hv_val" | grep -Eq '^[0-9]+$'; then
+      hv_val=localhost
+      eval export $hv="$hv_val"
+    fi
+  done
+  echo "[start.sh] DB env normalized to host=localhost port=5432 (where relevant)" >&2
+}
+
+print_wait_db_env() {
+  echo "[start.sh] Snapshot of WAIT*/DB* env (after sanitize):" >&2
+  env | grep -E '^(WAIT|DB_|POSTGRES|POSTGRESQL|PGHOST|PGPORT|ONLYOFFICE_DB_)' | sort || true
+}
+
+set_local_db_vars || true
+print_wait_db_env || true
 patch_conf || true
 
 # Start default document server supervisor in background
