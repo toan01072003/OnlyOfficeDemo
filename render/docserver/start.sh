@@ -121,6 +121,70 @@ patch_conf() {
 configure_cookies || true
 sanitize_wait_hosts || true
 ensure_defaults || true
+
+# Normalize and/or disable generic wait variables that can be injected by PaaS
+sanitize_wait_vars() {
+  # If a single WAIT_HOST numeric is provided without port, turn it into localhost:port
+  if [[ "${WAIT_HOST:-}" =~ ^[0-9]+$ ]] && [ -z "${WAIT_PORT:-}" ]; then
+    export WAIT_PORT="$WAIT_HOST"
+    export WAIT_HOST="localhost"
+    echo "[start.sh] Adjusted WAIT_HOST numeric to WAIT_HOST=localhost WAIT_PORT=${WAIT_PORT}" >&2
+  fi
+  # If host missing but port set → unset both
+  if [ -z "${WAIT_HOST:-}" ] && [ -n "${WAIT_PORT:-}" ]; then
+    echo "[start.sh] Unsetting WAIT_PORT (no WAIT_HOST)" >&2
+    unset WAIT_PORT
+  fi
+
+  # If WAIT_HOSTS exists but some tokens invalid, we already sanitized; if it is still invalid, unset
+  if [ -n "${WAIT_HOSTS:-}" ] && ! echo "$WAIT_HOSTS" | grep -q ':'; then
+    echo "[start.sh] Unsetting WAIT_HOSTS (no host:port entries)" >&2
+    unset WAIT_HOSTS
+  fi
+
+  # Some base images use WAIT_FOR_HOST / WAIT_FOR_PORT
+  if [[ "${WAIT_FOR_HOST:-}" =~ ^[0-9]+$ ]] && [ -z "${WAIT_FOR_PORT:-}" ]; then
+    export WAIT_FOR_PORT="$WAIT_FOR_HOST"
+    export WAIT_FOR_HOST="localhost"
+    echo "[start.sh] Adjusted WAIT_FOR_HOST numeric to WAIT_FOR_HOST=localhost WAIT_FOR_PORT=${WAIT_FOR_PORT}" >&2
+  fi
+  if [ -z "${WAIT_FOR_HOST:-}" ] && [ -n "${WAIT_FOR_PORT:-}" ]; then
+    echo "[start.sh] Unsetting WAIT_FOR_PORT (no WAIT_FOR_HOST)" >&2
+    unset WAIT_FOR_PORT
+  fi
+}
+
+# Fix DB env if accidentally inverted (e.g., DB_HOST=5432 with empty DB_PORT)
+sanitize_db_env() {
+  if [[ "${DB_HOST:-}" =~ ^[0-9]+$ ]] && [ -z "${DB_PORT:-}" ]; then
+    export DB_PORT="$DB_HOST"
+    export DB_HOST="localhost"
+    echo "[start.sh] Adjusted DB_HOST numeric to DB_HOST=localhost DB_PORT=${DB_PORT}" >&2
+  fi
+  # If host missing but port set → unset to avoid wait loops
+  if [ -z "${DB_HOST:-}" ] && [ -n "${DB_PORT:-}" ]; then
+    echo "[start.sh] Unsetting DB_PORT (no DB_HOST)" >&2
+    unset DB_PORT
+  fi
+}
+
+sanitize_wait_vars || true
+sanitize_db_env || true
+
+# As a last resort, drop problematic WAIT_* variables entirely if they remain inconsistent
+drop_broken_waits() {
+  local broken=0
+  # If any of these forms are present but still inconsistent, unset them
+  if [ -n "${WAIT_HOST:-}" ] && [ -z "${WAIT_PORT:-}" ]; then broken=1; fi
+  if [ -n "${WAIT_FOR_HOST:-}" ] && [ -z "${WAIT_FOR_PORT:-}" ]; then broken=1; fi
+  if [ -n "${WAIT_HOSTS:-}" ] && ! echo "$WAIT_HOSTS" | grep -Eiq ':[0-9]+'; then broken=1; fi
+  if [ "$broken" = "1" ]; then
+    echo "[start.sh] Unsetting WAIT_* variables to avoid invalid nc waits" >&2
+    unset WAIT_HOST WAIT_PORT WAIT_FOR_HOST WAIT_FOR_PORT WAIT_HOSTS WAIT_FOR WAIT_TIMEOUT WAIT_SLEEP
+  fi
+}
+
+drop_broken_waits || true
 patch_conf || true
 
 # Start default document server supervisor in background
