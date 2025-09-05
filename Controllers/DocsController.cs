@@ -7,6 +7,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
@@ -23,6 +24,7 @@ namespace OnlyOfficeDemo.Controllers
         // api.js của ONLYOFFICE
         private string DocumentServerOrigin => _cfg["OnlyOffice:DocumentServerOrigin"] ?? "http://localhost:8080";
         private const string ApiJsPath = "/web-apps/apps/api/documents/api.js";
+        private string JwtSecret => _cfg["OnlyOffice:JwtSecret"];
 
         private static readonly string[] AllowedExtensions = new[]
         {
@@ -207,11 +209,31 @@ namespace OnlyOfficeDemo.Controllers
             
             _logger.LogInformation("Config payload: {ConfigPayload}", System.Text.Json.JsonSerializer.Serialize(configPayload));
 
-            var vm = new OnlyOfficeConfig
+            object configForView;
+            var apiJs = $"{DocumentServerOrigin}{ApiJsPath}";
+
+            if (!string.IsNullOrWhiteSpace(JwtSecret))
             {
-                DocumentServerApiJs = $"{DocumentServerOrigin}{ApiJsPath}",
-                Config = configPayload
-            };
+                // Build token over the config payload (without the token field)
+                var token = CreateJwt(configPayload, JwtSecret);
+                configForView = new
+                {
+                    document = configPayload.document,
+                    editorConfig = configPayload.editorConfig,
+                    width = "100%",
+                    height = "100%",
+                    type = "desktop",
+                    token = token
+                };
+                _logger.LogInformation("Prepared editor configuration WITH JWT token");
+            }
+            else
+            {
+                _logger.LogInformation("Preparing editor configuration without JWT token");
+                configForView = configPayload;
+            }
+
+            var vm = new OnlyOfficeConfig { DocumentServerApiJs = apiJs, Config = configForView };
 
             return View(vm);
         }
@@ -402,6 +424,11 @@ public async Task<IActionResult> RegeneratePreviews()
                                             System.Text.Encoding.UTF8, "application/json")
             };
             req.Headers.Accept.ParseAdd("application/json");
+            if (!string.IsNullOrWhiteSpace(JwtSecret))
+            {
+                var t = CreateJwt(payload, JwtSecret);
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", t);
+            }
 
             var resp = await client.SendAsync(req);
             var body = await resp.Content.ReadAsStringAsync();
@@ -474,6 +501,11 @@ public async Task<IActionResult> RegeneratePreviews()
                                             System.Text.Encoding.UTF8, "application/json")
             };
             req2.Headers.Accept.ParseAdd("application/json");
+            if (!string.IsNullOrWhiteSpace(JwtSecret))
+            {
+                var t2 = CreateJwt(payloadSync, JwtSecret);
+                req2.Headers.Authorization = new AuthenticationHeaderValue("Bearer", t2);
+            }
             var resp2 = await client.SendAsync(req2);
             var body2 = await resp2.Content.ReadAsStringAsync();
 
@@ -563,6 +595,26 @@ public async Task<IActionResult> RegeneratePreviews()
                 // Fallback to a safe random GUID if hashing fails
                 return Guid.NewGuid().ToString("N");
             }
+        }
+
+        private static string Base64UrlEncode(byte[] input)
+        {
+            return Convert.ToBase64String(input).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        }
+
+        private static string CreateJwt(object payload, string secret)
+        {
+            var header = new { typ = "JWT", alg = "HS256" };
+            var headerJson = JsonSerializer.Serialize(header);
+            var payloadJson = JsonSerializer.Serialize(payload);
+
+            var headerB64 = Base64UrlEncode(Encoding.UTF8.GetBytes(headerJson));
+            var payloadB64 = Base64UrlEncode(Encoding.UTF8.GetBytes(payloadJson));
+            var toSign = Encoding.UTF8.GetBytes($"{headerB64}.{payloadB64}");
+            var key = Encoding.UTF8.GetBytes(secret ?? string.Empty);
+            using var h = new HMACSHA256(key);
+            var sig = Base64UrlEncode(h.ComputeHash(toSign));
+            return $"{headerB64}.{payloadB64}.{sig}";
         }
     }
 }

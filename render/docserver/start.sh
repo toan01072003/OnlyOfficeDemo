@@ -155,17 +155,27 @@ sanitize_wait_vars() {
 }
 
 # Fix DB env if accidentally inverted (e.g., DB_HOST=5432 with empty DB_PORT)
+normalize_host_port_pair() {
+  # $1 = HOST_VAR name, $2 = PORT_VAR name
+  local hv="$1" pv="$2" host="${!1:-}" port="${!2:-}"
+  if [[ "$host" =~ ^[0-9]+$ ]] && [ -z "$port" ]; then
+    eval export $pv="$host"
+    eval export $hv="localhost"
+    echo "[start.sh] Adjusted $hv numeric to $hv=localhost $pv=${!pv}" >&2
+  fi
+  if [ -z "$host" ] && [ -n "$port" ]; then
+    # Provide localhost default to avoid broken waits
+    eval export $hv="localhost"
+    echo "[start.sh] Set $hv=localhost for existing $pv=${!pv}" >&2
+  fi
+}
+
 sanitize_db_env() {
-  if [[ "${DB_HOST:-}" =~ ^[0-9]+$ ]] && [ -z "${DB_PORT:-}" ]; then
-    export DB_PORT="$DB_HOST"
-    export DB_HOST="localhost"
-    echo "[start.sh] Adjusted DB_HOST numeric to DB_HOST=localhost DB_PORT=${DB_PORT}" >&2
-  fi
-  # If host missing but port set → unset to avoid wait loops
-  if [ -z "${DB_HOST:-}" ] && [ -n "${DB_PORT:-}" ]; then
-    echo "[start.sh] Unsetting DB_PORT (no DB_HOST)" >&2
-    unset DB_PORT
-  fi
+  normalize_host_port_pair DB_HOST DB_PORT
+  normalize_host_port_pair POSTGRES_HOST POSTGRES_PORT
+  normalize_host_port_pair POSTGRESQL_HOST POSTGRESQL_PORT
+  normalize_host_port_pair ONLYOFFICE_DB_HOST ONLYOFFICE_DB_PORT
+  normalize_host_port_pair PGHOST PGPORT
 }
 
 sanitize_wait_vars || true
