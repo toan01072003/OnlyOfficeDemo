@@ -206,18 +206,18 @@ hard_disable_waits() {
 }
 
 force_local_db_defaults() {
-  for hv pv in DB_HOST DB_PORT POSTGRES_HOST POSTGRES_PORT POSTGRESQL_HOST POSTGRESQL_PORT ONLYOFFICE_DB_HOST ONLYOFFICE_DB_PORT PGHOST PGPORT; do :; done
   # Explicitly ensure localhost if any port var is set without host
   for pair in "DB_HOST DB_PORT" "POSTGRES_HOST POSTGRES_PORT" "POSTGRESQL_HOST POSTGRESQL_PORT" "ONLYOFFICE_DB_HOST ONLYOFFICE_DB_PORT" "PGHOST PGPORT"; do
     set -- $pair
-    hv=$1; pv=$2
+    local hv="$1" pv="$2"
+    local hv_val pv_val
     eval hv_val="\${$hv:-}"
     eval pv_val="\${$pv:-}"
     if [ -z "$hv_val" ] && [ -n "$pv_val" ]; then
       eval export $hv=localhost
       echo "[start.sh] Set $hv=localhost (fallback for $pv=$pv_val)" >&2
     fi
-    if echo "${hv_val}" | grep -Eq '^[0-9]+$'; then
+    if echo "$hv_val" | grep -Eq '^[0-9]+$'; then
       eval export $pv="$hv_val"
       eval export $hv=localhost
       echo "[start.sh] Corrected $hv/$pv (numeric host interpreted as port)" >&2
