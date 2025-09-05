@@ -69,3 +69,4 @@ C:\Users\Toan\Documents\LapTrinh\.net\project1\OnlyOfficeDemo\bin\Debug\net5.0\O
 C:\Users\Toan\Documents\LapTrinh\.net\project1\OnlyOfficeDemo\bin\Debug\net5.0\System.IO.Packaging.dll
 C:\Users\Toan\Documents\LapTrinh\.net\project1\OnlyOfficeDemo\bin\Debug\net5.0\System.Management.Automation.dll
 C:\Users\Toan\Documents\LapTrinh\.net\project1\OnlyOfficeDemo\obj\Debug\net5.0\OnlyOfficeDemo.sourcelink.json
+C:\Users\Toan\Documents\LapTrinh\.net\project1\OnlyOfficeDemo\obj\Debug\net5.0\Razor\Views\Docs\Viewer.cshtml.g.cs

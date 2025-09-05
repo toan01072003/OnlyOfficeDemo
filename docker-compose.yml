@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+  docserver:
+    image: onlyoffice/documentserver:latest
+    container_name: onlyoffice-docserver
+    ports:
+      - "8080:80"
+    shm_size: "2g"
+    environment:
+      - JWT_ENABLED=false
+      - ALLOW_PRIVATE_IP_ADDRESS=true
+    restart: unless-stopped
+
+  web:
+    build: .
+    container_name: onlyoffice-app
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://0.0.0.0:8080
+      # Browser loads API from host port 8080
+      - OnlyOffice__DocumentServerOrigin=http://localhost:8080
+      # DocumentServer (inside docker network) calls back to this hostname:port
+      - OnlyOffice__PublicHost=web:8080
+      - OnlyOffice__Scheme=http
+      - OnlyOffice__UseOnlineViewer=false
+    depends_on:
+      - docserver
+    restart: unless-stopped
+

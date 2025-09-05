@@ -304,8 +304,10 @@ namespace OnlyOfficeDemo.Controllers
                 var origin = DocumentServerOrigin?.TrimEnd('/') ?? string.Empty;
                 if (string.IsNullOrWhiteSpace(origin)) return false;
                 using var client = _httpFactory.CreateClient();
-                client.Timeout = TimeSpan.FromSeconds(2);
-                var resp = await client.GetAsync($"{origin}/healthcheck");
+                client.Timeout = TimeSpan.FromSeconds(3);
+                // Probe the API JS (works on official image without custom /healthcheck)
+                var req = new HttpRequestMessage(HttpMethod.Head, $"{origin}{ApiJsPath}");
+                var resp = await client.SendAsync(req);
                 return resp.IsSuccessStatusCode;
             }
             catch { return false; }
