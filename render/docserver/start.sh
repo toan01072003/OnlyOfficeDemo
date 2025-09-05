@@ -5,6 +5,27 @@ PORT="${PORT:-80}"
 
 echo "[start.sh] Starting ONLYOFFICE DocumentServer wrapper on port ${PORT}" >&2
 
+# Ensure cookies work in cross-domain iframe (Chrome 3rd-party cookies)
+# Sets SameSite=None; Secure and Partitioned cookie attributes
+configure_cookies() {
+  local LOCAL_JSON=/etc/onlyoffice/documentserver/local.json
+  mkdir -p /etc/onlyoffice/documentserver
+  cat > "$LOCAL_JSON" <<'JSON'
+{
+  "services": {
+    "CoAuthoring": {
+      "cookie": {
+        "secure": true,
+        "sameSite": "None",
+        "partitioned": true
+      }
+    }
+  }
+}
+JSON
+  echo "[start.sh] Wrote cookie settings to $LOCAL_JSON (SameSite=None; Secure; Partitioned)" >&2
+}
+
 patch_conf() {
   local patched=0
   for CONF in \
@@ -46,7 +67,8 @@ patch_conf() {
   fi
 }
 
-# First attempt before startup (in case config already exists)
+# Apply cookie config and first attempt at nginx patch (in case config already exists)
+configure_cookies || true
 patch_conf || true
 
 # Start default document server supervisor in background
