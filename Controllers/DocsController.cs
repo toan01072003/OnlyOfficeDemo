@@ -104,8 +104,11 @@ namespace OnlyOfficeDemo.Controllers
             using (var fs = System.IO.File.Create(savePath))
                 await file.CopyToAsync(fs);
 
-            // Tạo/ cập nhật preview PDF
-            await EnsurePreviewPdfAsync(safeName);
+            // Khởi động tạo preview PDF nền (không chặn phản hồi upload)
+            _ = Task.Run(async () =>
+            {
+                try { await EnsurePreviewPdfAsync(safeName); } catch { }
+            });
 
             return RedirectToAction("Edit", new { name = safeName });
         }
@@ -431,6 +434,8 @@ public async Task<IActionResult> RegeneratePreviews()
         };
 
         using var client = _httpFactory.CreateClient();
+        // Mỗi lần gọi ConvertService chỉ chờ tối đa 15s để vòng lặp có thể retry nhanh
+        try { client.Timeout = TimeSpan.FromSeconds(15); } catch { }
 
         async Task<(bool endConvert, string fileUrl, int percent)> CallOnceAsync()
         {
