@@ -76,6 +76,35 @@ ensure_defaults() {
   esac
 }
 
+# Ensure sane defaults for AMQP/RabbitMQ to prevent invalid nc waits
+sanitize_amqp_env() {
+  # Prefer explicit URL if provided, otherwise ensure host/port/proto exist
+  if [ -z "${RABBITMQ_SERVER_URL:-}" ] && [ -n "${AMQP_URL:-}" ]; then
+    export RABBITMQ_SERVER_URL="$AMQP_URL"
+  fi
+
+  # Default protocol
+  : "${AMQP_PROTO:=amqp}"
+  export AMQP_PROTO
+
+  # Normalize host/port, falling back to localhost:5672
+  if [ -z "${AMQP_HOST:-}" ]; then
+    export AMQP_HOST=localhost
+  fi
+  if ! echo "${AMQP_PORT:-}" | grep -Eq '^[0-9]+$'; then
+    export AMQP_PORT=5672
+  fi
+
+  # If URL is still empty, synthesize one from pieces
+  if [ -z "${RABBITMQ_SERVER_URL:-}" ]; then
+    local userpass=""
+    if [ -n "${AMQP_USER:-}" ] && [ -n "${AMQP_PASS:-}" ]; then
+      userpass="${AMQP_USER}:${AMQP_PASS}@"
+    fi
+    export RABBITMQ_SERVER_URL="${AMQP_PROTO}://${userpass}${AMQP_HOST}:${AMQP_PORT}${AMQP_VHOST:+/$AMQP_VHOST}"
+  fi
+}
+
 patch_conf() {
   local patched=0
   for CONF in \
@@ -121,6 +150,7 @@ patch_conf() {
 configure_cookies || true
 sanitize_wait_hosts || true
 ensure_defaults || true
+sanitize_amqp_env || true
 
 # Normalize and/or disable generic wait variables that can be injected by PaaS
 sanitize_wait_vars() {
@@ -262,6 +292,10 @@ print_wait_db_env() {
 
 set_local_db_vars || true
 print_wait_db_env || true
+
+# Print AMQP snapshot for debugging
+echo "[start.sh] Snapshot of AMQP* env (after sanitize):" >&2
+env | grep -E '^(AMQP_|RABBITMQ_)' | sort || true
 patch_conf || true
 
 # Start default document server supervisor in background
