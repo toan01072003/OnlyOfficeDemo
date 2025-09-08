@@ -21,31 +21,15 @@ configure_cookies() {
       },
       "token": {
         "enable": {
-          "browser": false,
-          "request": {
-            "inbox": false,
-            "outbox": false
-          }
+          "request": {}
         },
-        "inbox": {
-          "header": "",
-          "inBody": false
-        },
-        "outbox": {
-          "header": "",
-          "inBody": false
-        }
+        "inbox": {},
+        "outbox": {}
       },
       "secret": {
-        "inbox": {
-          "string": ""
-        },
-        "outbox": {
-          "string": ""
-        },
-        "session": {
-          "string": ""
-        }
+        "inbox": {},
+        "outbox": {},
+        "session": {}
       }
     }
   }
@@ -138,20 +122,24 @@ sanitize_amqp_env() {
 }
 
 patch_conf() {
-  local patched=0
+  local changed=0
   for CONF in \
     /etc/onlyoffice/documentserver/nginx/ds.conf \
     /etc/nginx/conf.d/ds.conf
   do
     if [ -f "$CONF" ]; then
-      echo "[start.sh] Patching Nginx conf: $CONF" >&2
-      # Normalize listen directives to PORT (cover common patterns)
-      sed -E -i "s/listen\s+80(\s*;)/listen ${PORT}\1/g" "$CONF" || true
-      sed -E -i "s/listen\s+80\s+default_server;/listen ${PORT} default_server;/g" "$CONF" || true
-      sed -E -i "s/listen\s+0\.0\.0\.0:80(\s*;)/listen 0.0.0.0:${PORT}\1/g" "$CONF" || true
-      sed -E -i "s/listen\s+0\.0\.0\.0:80\s+default_server;/listen 0.0.0.0:${PORT} default_server;/g" "$CONF" || true
-      sed -E -i "s/listen\s+\[::\]:80(\s*;)/listen [::]:${PORT}\1/g" "$CONF" || true
-      sed -E -i "s/listen\s+\[::\]:80\s+default_server;/listen [::]:${PORT} default_server;/g" "$CONF" || true
+      # Normalize listen directives to PORT only if original 80 forms are present
+      if grep -Eq "listen\s+80(\s*;|\s+default_server;)" "$CONF" \
+         || grep -Eq "listen\s+0\.0\.0\.0:80(\s*;|\s+default_server;)" "$CONF" \
+         || grep -Eq "listen\s+\[::\]:80(\s*;|\s+default_server;)" "$CONF"; then
+        sed -E -i "s/listen\s+80(\s*;)/listen ${PORT}\1/g" "$CONF" || true
+        sed -E -i "s/listen\s+80\s+default_server;/listen ${PORT} default_server;/g" "$CONF" || true
+        sed -E -i "s/listen\s+0\.0\.0\.0:80(\s*;)/listen 0.0.0.0:${PORT}\1/g" "$CONF" || true
+        sed -E -i "s/listen\s+0\.0\.0\.0:80\s+default_server;/listen 0.0.0.0:${PORT} default_server;/g" "$CONF" || true
+        sed -E -i "s/listen\s+\[::\]:80(\s*;)/listen [::]:${PORT}\1/g" "$CONF" || true
+        sed -E -i "s/listen\s+\[::\]:80\s+default_server;/listen [::]:${PORT} default_server;/g" "$CONF" || true
+        changed=1
+      fi
 
       # Inject a fast /healthcheck exact-match inside first server block if missing
       if ! grep -q "location = /healthcheck" "$CONF"; then
@@ -166,13 +154,12 @@ patch_conf() {
           }
         ' "$CONF" > "${CONF}.tmp" && mv "${CONF}.tmp" "$CONF" || true
         echo "[start.sh] Injected /healthcheck location into $CONF" >&2
+        changed=1
       fi
-
-      patched=1
     fi
   done
 
-  if [ "$patched" = "1" ]; then
+  if [ "$changed" = "1" ]; then
     # Try reload Nginx if already running (ignore failures during boot)
     (nginx -t >/dev/null 2>&1 && nginx -s reload) || true
   fi
