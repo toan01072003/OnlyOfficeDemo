@@ -374,8 +374,10 @@ public async Task<IActionResult> RegeneratePreviews()
             var root = doc.RootElement;
             var status = root.GetProperty("status").GetInt32();
 
-            // 2 = MustSave, 6 = MustForceSave
-            if (status == 2 || status == 6)
+            // ONLYOFFICE callback statuses (subset):
+            // 1 = Editing (heartbeat), 2 = MustSave, 4 = MustForceSave (older builds), 6 = MustForceSave
+            // Treat 2/4/6/7 as events that provide a downloadable 'url'
+            if (status == 2 || status == 4 || status == 6 || status == 7)
             {
                 var url = root.GetProperty("url").GetString();
                 var targetPath = Path.Combine(DocsRoot, name);
@@ -384,8 +386,8 @@ public async Task<IActionResult> RegeneratePreviews()
                 var bytes = await client.GetByteArrayAsync(url);
                 await System.IO.File.WriteAllBytesAsync(targetPath, bytes);
 
-                // Cập nhật preview PDF
-                await EnsurePreviewPdfAsync(name);
+                // Cập nhật preview PDF (không chặn phản hồi)
+                _ = Task.Run(async () => { try { await EnsurePreviewPdfAsync(name); } catch { } });
 
                 return Json(new { error = 0 });
             }
