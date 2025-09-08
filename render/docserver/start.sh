@@ -291,18 +291,14 @@ hard_disable_waits || true
 
 # Strongly set local DB vars so any wait scripts get a valid host:port
 set_local_db_vars() {
-  # If external DB env is provided, propagate into PG* and other forms for consistency
+  # If external DB env is provided, FORCE propagate into PG*/POSTGRES* to avoid waits on wrong port
   local ext_host="${DB_HOST:-}" ext_port="${DB_PORT:-}"
-  if [ -n "$ext_host" ] && [ -n "$ext_port" ]; then
-    # Only set if target vars are empty to avoid overriding explicit env
-    : "${PGHOST:=$ext_host}"; export PGHOST
-    : "${PGPORT:=$ext_port}"; export PGPORT
-    : "${POSTGRES_HOST:=$ext_host}"; export POSTGRES_HOST
-    : "${POSTGRES_PORT:=$ext_port}"; export POSTGRES_PORT
-    : "${POSTGRESQL_HOST:=$ext_host}"; export POSTGRESQL_HOST
-    : "${POSTGRESQL_PORT:=$ext_port}"; export POSTGRESQL_PORT
-    : "${ONLYOFFICE_DB_HOST:=$ext_host}"; export ONLYOFFICE_DB_HOST
-    : "${ONLYOFFICE_DB_PORT:=$ext_port}"; export ONLYOFFICE_DB_PORT
+  if [ -n "$ext_host" ] && echo "${ext_port:-}" | grep -Eq '^[0-9]+'; then
+    export PGHOST="$ext_host"; export PGPORT="$ext_port"
+    export POSTGRES_HOST="$ext_host"; export POSTGRES_PORT="$ext_port"
+    export POSTGRESQL_HOST="$ext_host"; export POSTGRESQL_PORT="$ext_port"
+    export ONLYOFFICE_DB_HOST="$ext_host"; export ONLYOFFICE_DB_PORT="$ext_port"
+    echo "[start.sh] Forcing PG*/POSTGRES* env to match DB_*: host=$ext_host port=$ext_port" >&2
   fi
 
   local pairs=(
