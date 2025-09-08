@@ -18,6 +18,11 @@ configure_cookies() {
         "secure": true,
         "sameSite": "None",
         "partitioned": true
+      },
+      "token": {
+        "enable": {
+          "browser": false
+        }
       }
     }
   }
@@ -102,6 +107,11 @@ sanitize_amqp_env() {
       userpass="${AMQP_USER}:${AMQP_PASS}@"
     fi
     export RABBITMQ_SERVER_URL="${AMQP_PROTO}://${userpass}${AMQP_HOST}:${AMQP_PORT}${AMQP_VHOST:+/$AMQP_VHOST}"
+  fi
+
+  # Provide AMQP_URI (preferred by newer images) alongside legacy var
+  if [ -z "${AMQP_URI:-}" ]; then
+    export AMQP_URI="${RABBITMQ_SERVER_URL}"
   fi
 }
 
