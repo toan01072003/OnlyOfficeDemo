@@ -7,7 +7,7 @@
 
     string PdfPreviewUrl(string file)
     {
-        var baseName = Path.GetFileNameWithoutExtension(file);
+        var baseName = System.IO.Path.GetFileNameWithoutExtension(file);
         var safe = Uri.EscapeDataString(baseName);
         return $"/previews/{safe}.pdf";
     }
@@ -15,8 +15,8 @@
     bool PdfExists(string file)
     {
         // Match server-side path used by EnsurePreviewPdfAsync
-        var baseName = Path.GetFileNameWithoutExtension(file);
-        var pdfPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "previews", baseName + ".pdf");
+        var baseName = System.IO.Path.GetFileNameWithoutExtension(file);
+        var pdfPath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot", "previews", baseName + ".pdf");
         return System.IO.File.Exists(pdfPath);
     }
 }
