@@ -370,29 +370,56 @@ public async Task<IActionResult> RegeneratePreviews()
             var body = await reader.ReadToEndAsync();
             _logger.LogInformation("ONLYOFFICE callback body: {Body}", body);
 
-            using var doc = JsonDocument.Parse(body);
-            var root = doc.RootElement;
-            var status = root.GetProperty("status").GetInt32();
-
-            // ONLYOFFICE callback statuses (subset):
-            // 1 = Editing (heartbeat), 2 = MustSave, 4 = MustForceSave (older builds), 6 = MustForceSave
-            // Treat 2/4/6/7 as events that provide a downloadable 'url'
-            if (status == 2 || status == 4 || status == 6 || status == 7)
+            try
             {
-                var url = root.GetProperty("url").GetString();
-                var targetPath = Path.Combine(DocsRoot, name);
+                using var doc = JsonDocument.Parse(body);
+                var root = doc.RootElement;
+                var status = root.GetProperty("status").GetInt32();
 
-                var client = _httpFactory.CreateClient();
-                var bytes = await client.GetByteArrayAsync(url);
-                await System.IO.File.WriteAllBytesAsync(targetPath, bytes);
+                // ONLYOFFICE statuses we act on: 2=MustSave, 4/6/7=ForceSave variants
+                if (status == 2 || status == 4 || status == 6 || status == 7)
+                {
+                    // Some statuses may omit 'url'. Be defensive.
+                    string? url = null;
+                    if (root.TryGetProperty("url", out var urlProp))
+                        url = urlProp.GetString();
 
-                // Cập nhật preview PDF (không chặn phản hồi)
-                _ = Task.Run(async () => { try { await EnsurePreviewPdfAsync(name); } catch { } });
+                    if (!string.IsNullOrWhiteSpace(url))
+                    {
+                        var targetPath = Path.Combine(DocsRoot, name);
+                        var client = _httpFactory.CreateClient();
 
+                        // If DocumentServer sent a JWT token in the callback, pass it to the download as Authorization
+                        string? cbToken = null;
+                        if (root.TryGetProperty("token", out var tProp))
+                            cbToken = tProp.GetString();
+
+                        var req = new HttpRequestMessage(HttpMethod.Get, url);
+                        if (!string.IsNullOrWhiteSpace(cbToken))
+                            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", cbToken);
+
+                        var resp = await client.SendAsync(req);
+                        resp.EnsureSuccessStatusCode();
+                        var bytes = await resp.Content.ReadAsByteArrayAsync();
+                        await System.IO.File.WriteAllBytesAsync(targetPath, bytes);
+
+                        // Update preview in background
+                        _ = Task.Run(async () => { try { await EnsurePreviewPdfAsync(name); } catch { } });
+                    }
+
+                    // Always ACK to avoid retries loop; we already logged body above
+                    return Json(new { error = 0 });
+                }
+
+                // Non-saving status → ACK
                 return Json(new { error = 0 });
             }
-
-            return Json(new { error = 0 });
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error handling ONLYOFFICE callback for {Name}", name);
+                // Return HTTP 200 with non-zero error to allow DS to retry without 500s flooding logs
+                return Json(new { error = 1 });
+            }
         }
 
         // ===== Convert DOCX/XLSX/PPTX → PDF bằng ONLYOFFICE ConvertService (polling) =====
