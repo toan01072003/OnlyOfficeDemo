@@ -21,7 +21,30 @@ configure_cookies() {
       },
       "token": {
         "enable": {
-          "browser": false
+          "browser": false,
+          "request": {
+            "inbox": false,
+            "outbox": false
+          }
+        },
+        "inbox": {
+          "header": "",
+          "inBody": false
+        },
+        "outbox": {
+          "header": "",
+          "inBody": false
+        }
+      },
+      "secret": {
+        "inbox": {
+          "string": ""
+        },
+        "outbox": {
+          "string": ""
+        },
+        "session": {
+          "string": ""
         }
       }
     }
@@ -83,10 +106,8 @@ ensure_defaults() {
 
 # Ensure sane defaults for AMQP/RabbitMQ to prevent invalid nc waits
 sanitize_amqp_env() {
-  # Prefer explicit URL if provided, otherwise ensure host/port/proto exist
-  if [ -z "${RABBITMQ_SERVER_URL:-}" ] && [ -n "${AMQP_URL:-}" ]; then
-    export RABBITMQ_SERVER_URL="$AMQP_URL"
-  fi
+  # Build a canonical AMQP URI; prefer AMQP_URL if provided by env
+  local uri="${AMQP_URL:-}"
 
   # Default protocol
   : "${AMQP_PROTO:=amqp}"
@@ -100,19 +121,20 @@ sanitize_amqp_env() {
     export AMQP_PORT=5672
   fi
 
-  # If URL is still empty, synthesize one from pieces
-  if [ -z "${RABBITMQ_SERVER_URL:-}" ]; then
+  # If AMQP_URL not provided, synthesize from pieces
+  if [ -z "$uri" ]; then
     local userpass=""
     if [ -n "${AMQP_USER:-}" ] && [ -n "${AMQP_PASS:-}" ]; then
       userpass="${AMQP_USER}:${AMQP_PASS}@"
     fi
-    export RABBITMQ_SERVER_URL="${AMQP_PROTO}://${userpass}${AMQP_HOST}:${AMQP_PORT}${AMQP_VHOST:+/$AMQP_VHOST}"
+    uri="${AMQP_PROTO}://${userpass}${AMQP_HOST}:${AMQP_PORT}${AMQP_VHOST:+/$AMQP_VHOST}"
   fi
 
-  # Provide AMQP_URI (preferred by newer images) alongside legacy var
+  # Provide AMQP_URI (preferred by newer images). Avoid exporting deprecated var.
   if [ -z "${AMQP_URI:-}" ]; then
-    export AMQP_URI="${RABBITMQ_SERVER_URL}"
+    export AMQP_URI="$uri"
   fi
+  # If legacy var is already present from the environment, do not override it, but do not create it to avoid warnings.
 }
 
 patch_conf() {
