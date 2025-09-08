@@ -438,12 +438,36 @@ public async Task<IActionResult> RegeneratePreviews()
 
     try
     {
+        // Xây fileUrl không phụ thuộc HttpContext (để gọi được từ background)
         var configuredHost = _cfg["OnlyOffice:PublicHost"];
-        var scheme        = _cfg["OnlyOffice:Scheme"] ?? (Request.Scheme ?? "http");
-        var publicHost    = string.IsNullOrWhiteSpace(configuredHost) ? Request.Host.ToString() : configuredHost;
+        var scheme = _cfg["OnlyOffice:Scheme"];
+        string publicHost;
 
-        // URL public để Document Server tải file gốc
-        var fileUrl = Url.ActionLink("FilePublic", null, new { name }, scheme, publicHost);
+        if (!string.IsNullOrWhiteSpace(configuredHost))
+        {
+            publicHost = configuredHost;
+        }
+        else
+        {
+            // Thử lấy từ HttpContext nếu còn sống; nếu không, bỏ qua preview
+            try
+            {
+                publicHost = Request?.Host.ToString();
+                scheme = scheme ?? Request?.Scheme;
+            }
+            catch { publicHost = null; }
+        }
+
+        scheme = string.IsNullOrWhiteSpace(scheme) ? "https" : scheme;
+        if (string.IsNullOrWhiteSpace(publicHost))
+        {
+            // Không có host công khai -> không thể tạo preview đáng tin cậy
+            _logger.LogWarning("Skip preview build: missing OnlyOffice:PublicHost and no active HttpContext");
+            return;
+        }
+
+        var safeName = Uri.EscapeDataString(name);
+        var fileUrl = $"{scheme}://{publicHost}/files/{safeName}";
 
         var documentServerOrigin = _cfg["OnlyOffice:DocumentServerOrigin"] ?? "http://localhost:8080";
         var convertEndpoint = $"{documentServerOrigin.TrimEnd('/')}/ConvertService.ashx";
