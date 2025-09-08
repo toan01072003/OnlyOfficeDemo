@@ -291,6 +291,20 @@ hard_disable_waits || true
 
 # Strongly set local DB vars so any wait scripts get a valid host:port
 set_local_db_vars() {
+  # If external DB env is provided, propagate into PG* and other forms for consistency
+  local ext_host="${DB_HOST:-}" ext_port="${DB_PORT:-}"
+  if [ -n "$ext_host" ] && [ -n "$ext_port" ]; then
+    # Only set if target vars are empty to avoid overriding explicit env
+    : "${PGHOST:=$ext_host}"; export PGHOST
+    : "${PGPORT:=$ext_port}"; export PGPORT
+    : "${POSTGRES_HOST:=$ext_host}"; export POSTGRES_HOST
+    : "${POSTGRES_PORT:=$ext_port}"; export POSTGRES_PORT
+    : "${POSTGRESQL_HOST:=$ext_host}"; export POSTGRESQL_HOST
+    : "${POSTGRESQL_PORT:=$ext_port}"; export POSTGRESQL_PORT
+    : "${ONLYOFFICE_DB_HOST:=$ext_host}"; export ONLYOFFICE_DB_HOST
+    : "${ONLYOFFICE_DB_PORT:=$ext_port}"; export ONLYOFFICE_DB_PORT
+  fi
+
   local pairs=(
     "DB_HOST DB_PORT"
     "POSTGRES_HOST POSTGRES_PORT"
@@ -305,16 +319,16 @@ set_local_db_vars() {
     eval pv_val="\${$pv:-}"
     # Default port to 5432 when missing or non-numeric
     if ! echo "${pv_val:-}" | grep -Eq '^[0-9]+$'; then
-      pv_val=5432
+      pv_val="${ext_port:-5432}"
       eval export $pv="$pv_val"
     fi
     # Ensure host is not empty and not purely numeric
     if [ -z "${hv_val:-}" ] || echo "$hv_val" | grep -Eq '^[0-9]+$'; then
-      hv_val=localhost
+      hv_val="${ext_host:-localhost}"
       eval export $hv="$hv_val"
     fi
   done
-  echo "[start.sh] DB env normalized to host=localhost port=5432 (where relevant)" >&2
+  echo "[start.sh] DB env normalized; primary=${DB_HOST:-localhost}:${DB_PORT:-5432} | PG=${PGHOST:-}:${PGPORT:-}" >&2
 }
 
 print_wait_db_env() {
