@@ -487,8 +487,14 @@ public async Task<IActionResult> RegeneratePreviews()
         };
 
         using var client = _httpFactory.CreateClient();
-        // Mỗi lần gọi ConvertService chỉ chờ tối đa 15s để vòng lặp có thể retry nhanh
-        try { client.Timeout = TimeSpan.FromSeconds(15); } catch { }
+        // Timeout per ConvertService poll; configurable to avoid 499s on server
+        var timeoutSeconds = 60; // sensible default
+        var cfgTimeout = _cfg["OnlyOffice:ConvertTimeoutSeconds"];
+        if (int.TryParse(cfgTimeout, out var parsed) && parsed > 0 && parsed <= 600)
+        {
+            timeoutSeconds = parsed;
+        }
+        try { client.Timeout = TimeSpan.FromSeconds(timeoutSeconds); } catch { }
 
         async Task<(bool endConvert, string fileUrl, int percent)> CallOnceAsync()
         {
