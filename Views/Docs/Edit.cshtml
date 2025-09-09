@@ -11,7 +11,6 @@
     <title>ONLYOFFICE Editor</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style> html, body { height:100%; margin:0; } #editor { height:100vh; } </style>
-    <script src="@Model.DocumentServerApiJs"></script>
 </head>
 <body>
     <div id="editor">
@@ -31,43 +30,78 @@
         const docConfig = @Html.Raw(configJson);
         console.log('OnlyOffice Config:', docConfig);
         console.log('API JS URL:', '@Model.DocumentServerApiJs');
-        
-        // Check if the API script loaded
-        window.addEventListener('load', function() {
-            setTimeout(function() {
+
+        function showLoadError(message) {
+            console.error(message);
+            document.getElementById('editor').innerHTML = `
+                <div style="padding: 20px; color: red; text-align: center;">
+                    <h3>Error: OnlyOffice API not loaded</h3>
+                    <p>The OnlyOffice Document Server API could not be loaded from: <br><code>@Model.DocumentServerApiJs</code></p>
+                    <p>${message}</p>
+                    <ul style="text-align: left; max-width: 600px; margin: 0 auto;">
+                        <li>Verify DocumentServer is running at <code>@Model.DocumentServerApiJs.Split("/web-apps")[0]</code></li>
+                        <li>On iOS in-app browsers, try “Open in Safari/Chrome”</li>
+                        <li>Check network stability and try again</li>
+                    </ul>
+                    <p><a href="/">Return to document list</a></p>
+                </div>
+            `;
+        }
+
+        function initEditorIfReady() {
+            if (window.DocsAPI) {
                 try {
-                    if (typeof DocsAPI === 'undefined') {
-                        console.error('DocsAPI is undefined. The OnlyOffice API script may not have loaded correctly.');
-                        document.getElementById('editor').innerHTML = `
-                            <div style="padding: 20px; color: red; text-align: center;">
-                                <h3>Error: OnlyOffice API not loaded</h3>
-                                <p>The OnlyOffice Document Server API could not be loaded from: <br><code>@Model.DocumentServerApiJs</code></p>
-                                <p>Please check the following:</p>
-                                <ul style="text-align: left; max-width: 600px; margin: 0 auto;">
-                                    <li>Verify that the OnlyOffice Document Server is running at <code>@Model.DocumentServerApiJs.Split("/web-apps")[0]</code></li>
-                                    <li>Check if there are any CORS issues in the browser console</li>
-                                    <li>Make sure the DocumentServerOrigin in appsettings.json is correct</li>
-                                </ul>
-                                <p><a href="/">Return to document list</a></p>
-                            </div>
-                        `;
-                    } else {
-                        const editor = new DocsAPI.DocEditor("editor", docConfig);
-                        console.log('Editor initialized successfully');
-                    }
-                } catch (error) {
-                    console.error('Error initializing OnlyOffice editor:', error);
-                    document.getElementById('editor').innerHTML = `
-                        <div style="padding: 20px; color: red; text-align: center;">
-                            <h3>Error initializing editor</h3>
-                            <p>Error message: ${error.message}</p>
-                            <p>Please check browser console for more details.</p>
-                            <p><a href="/">Return to document list</a></p>
-                        </div>
-                    `;
+                    const editor = new DocsAPI.DocEditor('editor', docConfig);
+                    console.log('Editor initialized successfully');
+                    return true;
+                } catch (e) {
+                    console.error('Error initializing OnlyOffice editor:', e);
+                    showLoadError('Initialization failed: ' + (e && e.message ? e.message : e));
                 }
-            }, 1000); // Give the script a second to load
-        });
+            }
+            return false;
+        }
+
+        (function loadApiWithRetry() {
+            const maxTries = 3;
+            let attempt = 0;
+
+            function addScript() {
+                const s = document.createElement('script');
+                // Bust caches on retries to avoid partially cached aborts
+                s.src = '@Model.DocumentServerApiJs' + (attempt > 0 ? ('?r=' + Date.now()) : '');
+                s.async = true;
+                s.defer = true;
+                s.onerror = function () {
+                    attempt++;
+                    if (attempt <= maxTries) {
+                        const backoff = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+                        console.warn('Retry loading api.js in', backoff, 'ms (attempt', attempt, 'of', maxTries, ')');
+                        setTimeout(addScript, backoff);
+                    } else {
+                        showLoadError('Failed to load api.js after multiple attempts.');
+                    }
+                };
+                s.onload = function () {
+                    if (!initEditorIfReady()) {
+                        // Very rare: loaded but global not ready yet – try once more shortly
+                        setTimeout(function(){ initEditorIfReady() || showLoadError('DocsAPI not available after load.'); }, 500);
+                    }
+                };
+                document.head.appendChild(s);
+            }
+
+            // If the page becomes visible again (e.g., user returns from background), retry once
+            document.addEventListener('visibilitychange', function () {
+                if (document.visibilityState === 'visible' && typeof window.DocsAPI === 'undefined' && attempt === 0) {
+                    console.log('Page visible; retry loading api.js');
+                    attempt = 1; // mark as a retry path
+                    addScript();
+                }
+            });
+
+            addScript();
+        })();
     </script>
 </body>
 </html>
